@@ -57,7 +57,7 @@ func ParseEmail(r io.Reader, opts ...ParseOption) (Email, error) {
 
 	} else if strings.HasPrefix(email.Headers.ContentType.ContentType, contentTypeMultipartPrefix) {
 		boundary := email.Headers.ContentType.Params["boundary"]
-		emailBodies, err := parsePart(msg.Body, email.Headers.ContentType, boundary)
+		emailBodies, err := parsePart(msg.Body, email.Headers.ContentType, boundary, opts...)
 		if err != nil {
 			return email, fmt.Errorf(
 				"letters.ParseEmail: cannot parse part %q with boundary %q: %w",
