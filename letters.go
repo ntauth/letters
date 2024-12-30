@@ -1,6 +1,7 @@
 package letters
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"net/mail"
@@ -9,7 +10,12 @@ import (
 	"golang.org/x/net/html/charset"
 )
 
-func ParseEmail(r io.Reader) (Email, error) {
+func ParseEmail(r io.Reader, opts ...ParseOption) (Email, error) {
+	var options ParseOptions
+	for _, opt := range opts {
+		opt(&options)
+	}
+
 	var email Email
 
 	msg, err := mail.ReadMessage(r)
@@ -66,13 +72,15 @@ func ParseEmail(r io.Reader) (Email, error) {
 		email.AttachedFiles = emailBodies.AttachedFiles
 
 	} else {
-		afl, err := decodeAttachmentFileFromBody(msg.Body, email.Headers, cte)
-		if err != nil {
-			return email, fmt.Errorf(
-				"letters.decoders.ParseEmail: cannot decode attached file content from body: %w",
-				err)
+		if !options.SkipAttachments {
+			afl, err := decodeAttachmentFileFromBody(msg.Body, email.Headers, cte)
+			if err != nil {
+				return email, fmt.Errorf(
+					"letters.decoders.ParseEmail: cannot decode attached file content from body: %w",
+					err)
+			}
+			email.AttachedFiles = append(email.AttachedFiles, afl)
 		}
-		email.AttachedFiles = append(email.AttachedFiles, afl)
 	}
 
 	email.Text = normalizeMultilineString(email.Text)
@@ -80,4 +88,17 @@ func ParseEmail(r io.Reader) (Email, error) {
 	email.HTML = normalizeMultilineString(email.HTML)
 
 	return email, nil
+}
+
+func StripEmailAttachments(r io.Reader) ([]byte, error) {
+	var buf bytes.Buffer
+
+	echoReader := io.TeeReader(r, &buf)
+
+	_, err := ParseEmail(echoReader, WithParseSkipAttachments())
+	if err != nil {
+		return nil, fmt.Errorf("letters.StripEmailAttachments: cannot parse email: %w", err)
+	}
+
+	return buf.Bytes(), nil
 }

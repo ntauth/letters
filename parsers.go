@@ -385,7 +385,12 @@ func isAttachedFile(contentType ContentTypeHeader, parentContentType ContentType
 	return parentContentType.ContentType == contentTypeMultipartMixed || parentContentType.ContentType == contentTypeMultipartParallel
 }
 
-func parsePart(msg io.Reader, parentContentType ContentTypeHeader, boundary string) (emailBodies, error) {
+func parsePart(msg io.Reader, parentContentType ContentTypeHeader, boundary string, opts ...ParseOption) (emailBodies, error) {
+	var options ParseOptions
+	for _, opt := range opts {
+		opt(&options)
+	}
+
 	var emailBodies emailBodies
 
 	multipartReader := multipart.NewReader(msg, boundary)
@@ -432,7 +437,12 @@ func parsePart(msg io.Reader, parentContentType ContentTypeHeader, boundary stri
 				"letters.parsers.parsePart: cannot parse Content-Disposition: %w",
 				err)
 		}
+
 		if cdh.ContentDisposition == attachment {
+			if options.SkipAttachments {
+				continue
+			}
+
 			attachedFile, err := decodeAttachedFileFromPart(part, cte)
 			if err != nil {
 				return emailBodies, fmt.Errorf(
@@ -490,6 +500,10 @@ func parsePart(msg io.Reader, parentContentType ContentTypeHeader, boundary stri
 		}
 
 		if isInlineFile(partContentType, parentContentType, cdh) {
+			if options.SkipAttachments {
+				continue
+			}
+
 			inlineFile, err := decodeInlineFile(part, cte)
 			if err != nil {
 				return emailBodies, fmt.Errorf(
@@ -501,6 +515,10 @@ func parsePart(msg io.Reader, parentContentType ContentTypeHeader, boundary stri
 		}
 
 		if isAttachedFile(partContentType, parentContentType) {
+			if options.SkipAttachments {
+				continue
+			}
+
 			attachedFile, err := decodeAttachedFileFromPart(part, cte)
 			if err != nil {
 				return emailBodies, fmt.Errorf(
